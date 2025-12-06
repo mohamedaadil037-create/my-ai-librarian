@@ -1,0 +1,49 @@
+import os
+from transformers import pipeline
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+# 1. SETUP: LOAD THE BRAINS
+print("🤖 Loading Librarian (Embedder)...")
+embedder = SentenceTransformer('all-MiniLM-L6-v2')
+
+print("🤖 Loading Writer (Generator)...")
+bot = pipeline("text2text-generation", model="google/flan-t5-small")
+
+# 2. SETUP: READ THE BOOK
+print("📚 Reading the manual...")
+# We open the text file from the data folder
+with open('data/z_phone_manual.txt', 'r') as f:
+    # Read lines and remove empty lines
+    documents = [line.strip() for line in f.readlines() if line.strip()]
+
+# Create the Map (Vector Database) immediately
+doc_vectors = embedder.encode(documents)
+print("✅ Ready to chat!")
+
+# 3. THE FUNCTION (The Logic)
+def get_answer(user_question):
+    # Search
+    question_vector = embedder.encode([user_question])
+    scores = cosine_similarity(question_vector, doc_vectors)
+    best_index = np.argmax(scores)
+    best_info = documents[best_index]
+    
+    # Generate
+    full_prompt = f"Context: {best_info} Question: {user_question}"
+    answer = bot(full_prompt, max_length=100)[0]['generated_text']
+    
+    return best_info, answer
+
+# 4. THE LOOP (Chat Interface)
+if __name__ == "__main__":
+    print("\n--- Z-PHONE SUPPORT BOT (Type 'quit' to exit) ---")
+    while True:
+        user_input = input("\nYou: ")
+        if user_input.lower() in ['quit', 'exit']:
+            break
+            
+        source, reply = get_answer(user_input)
+        print(f"Bot: {reply}")
+        print(f"(Source used: '{source}')")
